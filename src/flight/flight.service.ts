@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
@@ -23,7 +23,9 @@ type FlightHttpResult = {
 };
 
 @Injectable()
-export class FlightService {
+export class FlightService implements OnModuleInit {
+  private readonly ttlInSeconds = 3600;
+
   private readonly dataSourceUrls = [
     'https://coding-challenge.powerus.de/flight/source1',
     'https://coding-challenge.powerus.de/flight/source2',
@@ -33,6 +35,10 @@ export class FlightService {
     private readonly httpService: HttpService,
     private readonly redisService: RedisService,
   ) {}
+
+  onModuleInit() {
+    this.loadFlights();
+  }
 
   private async fetchFlights(): Promise<FlightHttpResult> {
     const flightDataPromises = this.dataSourceUrls.map((url) =>
@@ -72,16 +78,19 @@ export class FlightService {
     return { flights: uniqueFlights };
   }
 
-  @Cron('* * * * *')
+  // run every hour
+  @Cron('0 * * * *')
   private async loadFlights() {
     const flightsData = await this.fetchFlights();
     const uniqueFlights = this.removeDuplicates(flightsData);
 
-    await this.redisService.set('flights', JSON.stringify(uniqueFlights));
+    await this.redisService
+      .getClient()
+      .set('flights', JSON.stringify(uniqueFlights), 'EX', this.ttlInSeconds);
   }
 
   async getFlights() {
-    const flights = await this.redisService.get('flights');
+    const flights = await this.redisService.getClient().get('flights');
 
     if (!flights) {
       return [];

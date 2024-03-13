@@ -15,11 +15,7 @@ export class RedisService implements OnModuleInit {
     });
   }
 
-  async set(key: string, value: string) {
-    return this.client.set(key, value);
-  }
-
-  async get(key: string) {
-    return this.client.get(key);
+  getClient(): Redis {
+    return this.client;
   }
 }
