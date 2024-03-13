@@ -7,6 +7,6 @@ export class FlightController {
 
   @Get('/')
   async getFlights() {
-    return this.flightService.fetchFlightsFromExternalSources();
+    return this.flightService.getFlights();
   }
 }

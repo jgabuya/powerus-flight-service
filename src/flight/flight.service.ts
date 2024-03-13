@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import { RedisService } from '../redis/redis.service';
+import { Cron } from '@nestjs/schedule';
 
 type FlightSlice = {
   origin_name: string;
@@ -27,9 +29,12 @@ export class FlightService {
     'https://coding-challenge.powerus.de/flight/source2',
   ];
 
-  constructor(private httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly redisService: RedisService,
+  ) {}
 
-  async fetchFlightsFromExternalSources(): Promise<FlightHttpResult> {
+  private async fetchFlights(): Promise<FlightHttpResult> {
     const flightDataPromises = this.dataSourceUrls.map((url) =>
       firstValueFrom(this.httpService.get(url)),
     );
@@ -41,17 +46,11 @@ export class FlightService {
           result.value.data.flights,
       );
 
-    console.log('original length', results.flat().length);
-    console.log(
-      'removed duplicates length',
-      this.removeDuplicates({ flights: results.flat() }).flights.length,
-    );
-
-    return this.removeDuplicates({ flights: results.flat() });
+    return { flights: results.flat() };
   }
 
   private removeDuplicates(data: FlightHttpResult): FlightHttpResult {
-    // use flight number and dates as identifiers
+    // use flight number and dates as uniqie flight identifiers
     const seen = new Set();
 
     const uniqueFlights = data.flights.filter((flight) => {
@@ -73,5 +72,21 @@ export class FlightService {
     return { flights: uniqueFlights };
   }
 
-  async populateFlightsCache() {}
+  @Cron('* * * * *')
+  private async loadFlights() {
+    const flightsData = await this.fetchFlights();
+    const uniqueFlights = this.removeDuplicates(flightsData);
+
+    await this.redisService.set('flights', JSON.stringify(uniqueFlights));
+  }
+
+  async getFlights() {
+    const flights = await this.redisService.get('flights');
+
+    if (!flights) {
+      return [];
+    }
+
+    return JSON.parse(flights);
+  }
 }
