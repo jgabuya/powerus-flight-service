@@ -56,7 +56,7 @@ export class FlightService implements OnModuleInit {
   }
 
   private removeDuplicates(data: FlightHttpResult): FlightHttpResult {
-    // use flight number and dates as uniqie flight identifiers
+    // use flight number and dates as unique flight identifiers
     const seen = new Set();
 
     const uniqueFlights = data.flights.filter((flight) => {
