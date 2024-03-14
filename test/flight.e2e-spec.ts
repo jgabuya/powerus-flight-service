@@ -8,12 +8,28 @@ import {
 } from './mocks/flights';
 import { AppModule } from '../src/app.module';
 import { RedisService } from '../src/redis/redis.service';
-import * as nock from 'nock';
 import RedisMock from 'ioredis-mock';
+import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
 
 describe('FlightsController (e2e)', () => {
   let app: INestApplication;
   let redisService: RedisService;
+
+  // mock calls to external urls
+  const externalServerMock = setupServer(
+    http.get('https://coding-challenge.powerus.de/flight/source1', () => {
+      return HttpResponse.json(flightsResponse1);
+    }),
+    http.get('https://coding-challenge.powerus.de/flight/source2', () => {
+      return HttpResponse.json(flightsResponse2);
+    }),
+  );
+
+  beforeAll(() => {
+    // https://stackoverflow.com/questions/68024935/msw-logging-warnings-for-unhandled-supertest-requests
+    externalServerMock.listen({ onUnhandledRequest: 'bypass' });
+  });
 
   beforeEach(async () => {
     const redisMock = new RedisMock();
@@ -21,6 +37,7 @@ describe('FlightsController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
+      // override RedisService to use a mock
       .overrideProvider(RedisService)
       .useValue({
         getClient: () => redisMock,
@@ -30,21 +47,19 @@ describe('FlightsController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     redisService = moduleFixture.get<RedisService>(RedisService);
     await app.init();
-
-    nock('https://coding-challenge.powerus.de')
-      .get('/flight/source1')
-      .reply(200, flightsResponse1)
-      .get('/flight/source2')
-      .reply(200, flightsResponse2);
   });
 
   afterEach(async () => {
     await app.close();
     await redisService.getClient().flushall();
-    nock.cleanAll();
+    externalServerMock.resetHandlers();
   });
 
-  it('/flights (GET)', () => {
+  afterAll(() => {
+    externalServerMock.close();
+  });
+
+  it('/flights (GET) - returns the flights data without duplicates', () => {
     return request(app.getHttpServer())
       .get('/flights')
       .expect(200)
