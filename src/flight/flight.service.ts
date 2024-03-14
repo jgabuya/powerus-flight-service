@@ -1,9 +1,9 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { Cron } from '@nestjs/schedule';
 import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { RedisService } from '../redis/redis.service';
-import { Cron } from '@nestjs/schedule';
 
 type FlightSlice = {
   origin_name: string;
@@ -78,8 +78,7 @@ export class FlightService implements OnModuleInit {
     return { flights: uniqueFlights };
   }
 
-  // run every hour
-  @Cron('0 * * * *')
+  @Cron('0 * * * *') // run every hour
   private async loadFlights() {
     const flightsData = await this.fetchFlights();
     const uniqueFlights = this.removeDuplicates(flightsData);
