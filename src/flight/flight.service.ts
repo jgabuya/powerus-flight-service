@@ -36,8 +36,8 @@ export class FlightService implements OnModuleInit {
     private readonly redisService: RedisService,
   ) {}
 
-  onModuleInit() {
-    this.loadFlights();
+  async onModuleInit() {
+    await this.loadFlights();
   }
 
   private async fetchFlights(): Promise<FlightHttpResult> {
